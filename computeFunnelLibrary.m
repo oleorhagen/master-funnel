@@ -13,6 +13,7 @@ system.controlVars = [u];
 %  First we need to generate our initial trajectories!      %
 %~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%
 load trajectories.mat % Gives us a `t,x,y,theta,u` vector.
+funnelOptions % Get the options for the funnel program.
 
 % Store the nominal trajectories.
 straight_solution = solutions(:,:,3); % The simplest case!
@@ -62,6 +63,11 @@ linSys = @(t) getLinearTrajectory(tSol, system, nomTraj);
 
 Soln = trajectoryLQR(tSol,linSys,Q,R,F,tol)
 
+K = reshape([Soln.K], 3, 150);
+kxFit = polyfit(tSol,K(1,:),nFit);
+kyFit = polyfit(tSol,K(2,:),nFit);
+kthetaFit = polyfit(tSol, K(3,:),nFit);
+
 %~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%
 % Linearize the closed loop system x_bar_dot = f_cl(t,xbar(t)) %
 % This is because we need to make sure we have polynomial      %
@@ -69,3 +75,43 @@ Soln = trajectoryLQR(tSol,linSys,Q,R,F,tol)
 %~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%
 
 % polyNomial = taylorApproximation(xdot, [x,y,theta], [x_nom;y_nom;theta_nom;u_nom], 3);
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%
+% Start creating the funnels around xdot = f_cl(t,xbar(t))     %
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%
+
+% First do only one iteration around one trajetory. Later loop over all.
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%
+% Lyapunov stability analyis.     %
+% Let V(x) = x'Sx, where S is the cost-to-go matrix from LQR solution:
+%%%% TODO %%%%
+% Plan:
+%
+%   1) Represent the S matrix, which is time-varying, as a polynomial.
+%
+%   2) Compute the derivative of S wrt time.
+%
+%   3) Try the Lyapunov function:
+%           V(x,t) = x'*S(t)*x     % x = perturbation from nominal
+%           dV(x,t) = 2*x*f(x,t)*S(t)*dS(t)   %Chain Rule  (check math...)
+%
+%   4) Verify stability by checking signs of lyapunov function and
+%      derivative?
+%
+%   5) Not sure if this whole approach is correct - check against papers...
+%
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%
+
+% u = -Kx
+controller = @(t,z)stabilizingcontroller(t,z(1,:),z(2,:),z(3,:),xFit,yFit,uFit,kxFit,kyFit,kthetaFit);
+
+
+NTrajectories = 1;
+for k =1:NTrajectories
+
+    ts = tSol;
+    rho0_tau = 0.4;
+    rho_guess = exp(rho0_tau*(ts-ts(1))/(ts(end)-ts(1)))-1+options.rho0;
+    rho_guess = rho_guess';
+end
